@@ -1,6 +1,7 @@
 package com.example.demo;
 
 import com.github.kwhat.jnativehook.GlobalScreen;
+import com.github.kwhat.jnativehook.NativeHookException;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
 import javafx.application.Application;
@@ -28,10 +29,10 @@ public class ScreenshotApp extends Application implements nativeKeyPressed {
         // Set up JNativeHook and disable its logging
         try {
             Logger logger = Logger.getLogger(GlobalScreen.class.getPackage().getName());
-            logger.setLevel(Level.WARNING);
+            logger.setLevel(Level.OFF);
             GlobalScreen.registerNativeHook();
-            GlobalScreen.addNativeKeyListener((NativeKeyListener) this);
-        } catch (Exception e) {
+            GlobalScreen.addNativeKeyListener(new GlobalKeyListener(this));
+        } catch (NativeHookException e) {
             e.printStackTrace();
         }
 
@@ -65,7 +66,6 @@ public class ScreenshotApp extends Application implements nativeKeyPressed {
     }
 
     private void saveDocument() {
-        // Save any unsaved screenshot without comment if applicable
         savePendingScreenshotWithoutComment();
         documentService.saveDocument("SessionDocument.docx");
         System.out.println("Document saved.");
@@ -82,20 +82,22 @@ public class ScreenshotApp extends Application implements nativeKeyPressed {
 
     @Override
     public void nativeKeyPressed(NativeKeyEvent e) {
+        // Debugging: Log the key events received
+        System.out.println("Key Pressed: " + NativeKeyEvent.getKeyText(e.getKeyCode()));
+
         // Check for Control + Space
         if (sessionActive &&
                 e.getKeyCode() == NativeKeyEvent.VC_SPACE &&
                 (e.getModifiers() & NativeKeyEvent.CTRL_MASK) != 0) {
+            System.out.println("Control + Space detected");
             captureScreenshot();
         }
     }
 
-    private void captureScreenshot() {
-        // Check if the previous screenshot was saved; if not, save it without a comment
+    void captureScreenshot() {
         savePendingScreenshotWithoutComment();
-
-        screenshotService.captureScreenshot();
-        commentAdded = false;  // Mark as unsaved comment
+        latestScreenshot = screenshotService.captureScreenshot();
+        commentAdded = false;
         System.out.println("Screenshot captured. Ready for adding a comment.");
     }
 
@@ -103,7 +105,7 @@ public class ScreenshotApp extends Application implements nativeKeyPressed {
         if (latestScreenshot != null) {
             documentService.addScreenshotToDocument(latestScreenshot, comment);
             System.out.println("Screenshot with comment added to document.");
-            commentAdded = true;  // Mark as comment added
+            commentAdded = true;
         } else {
             System.out.println("No screenshot captured yet. Press Control + Space first.");
         }
@@ -111,10 +113,9 @@ public class ScreenshotApp extends Application implements nativeKeyPressed {
 
     private void savePendingScreenshotWithoutComment() {
         if (latestScreenshot != null && !commentAdded) {
-            // If the last screenshot was not saved with a comment, save it without a comment
             documentService.addScreenshotToDocument(latestScreenshot, "");
             System.out.println("Screenshot saved without comment.");
-            commentAdded = true;  // Mark as saved without comment
+            commentAdded = true;
         }
     }
 
@@ -126,12 +127,17 @@ public class ScreenshotApp extends Application implements nativeKeyPressed {
 
     @Override
     public void stop() throws Exception {
-        GlobalScreen.unregisterNativeHook();  // Unregister JNativeHook
+        GlobalScreen.unregisterNativeHook();
         super.stop();
     }
-
 
     public static void main(String[] args) {
         launch();
     }
+
+    public boolean isSessionActive() {
+        return sessionActive;
+    }
+
+
 }
